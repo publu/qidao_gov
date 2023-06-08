@@ -356,7 +356,7 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
 
         uint unlock_time = (_unlock_time / WEEK) * WEEK; // Locktime is rounded down to weeks
         require(unlock_time >= block.timestamp + MINTIME, "Voting lock must be at least MINTIME");
-        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 3 years max");
+        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 4 years max");
 
         _deposit_for(msg.sender, _value, unlock_time, _locked, DepositType.CREATE_LOCK_TYPE);
     }
@@ -398,7 +398,7 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
         require(_locked.end > block.timestamp, "Lock expired");
         require(_locked.amount > 0, "Nothing is locked");
         require(unlock_time > _locked.end, "Can only increase lock duration");
-        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 3 years max");
+        require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 4 years max");
 
         _deposit_for(msg.sender, 0, unlock_time, _locked, DepositType.INCREASE_UNLOCK_TIME);
     }
