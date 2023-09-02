@@ -126,21 +126,13 @@ contract AuthorizerAdaptor is IAuthorizerAdaptor, ReentrancyGuard {
         // All comments below are part of the original source code, and as noted above some of them are incorrect. They
         // are kept for historical reasons.
 
-        bytes4 selector;
-
         // We want to check that the caller is authorized to call the function on the target rather than this function.
         // We must then pull the function selector from `data` rather than `msg.sig`. The most effective way to do this
         // is via assembly.
         // Note that if `data` is empty this will return an empty function signature (0x00000000)
 
-        // solhint-disable-next-line no-inline-assembly
-        assembly {
-            // The function selector encoded in `data` has an offset relative to the start of msg.data of:
-            // - 4 bytes due to the function selector for `performAction`
-            // - 3 words (3 * 32 = 96 bytes) for `target` and the length and offset of `data`
-            // 96 + 4 = 100 bytes
-            selector := calldataload(100)
-        }
+        _require(data.length >= 4, Errors.INSUFFICIENT_DATA);
+        bytes4 selector = data[0] | (bytes4(data[1]) >> 8) | (bytes4(data[2]) >> 16) | (bytes4(data[3]) >> 24);
 
         // NOTE: The `TimelockAuthorizer` special cases the `AuthorizerAdaptor` calling into it, so that the action ID
         // and `target` values are completely ignored. The following check will only pass if the caller is the
