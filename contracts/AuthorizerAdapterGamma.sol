@@ -22,7 +22,7 @@ import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/ReentrancyGuard.
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/Address.sol";
 
 /**
- * @title Authorizer Adaptor (fixed)
+ * @title Authorizer Adaptor (fixed, aka Gamma)
  * @notice This contract is intended to act as an adaptor between systems which expect a single admin address
  * and the Balancer Authorizer such that the Authorizer may grant/revoke admin powers to unlimited addresses.
  *
@@ -31,7 +31,7 @@ import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/Address.sol";
  * @dev When calculating the actionId to call a function on a target contract, it must be calculated as if it were
  * to be called on this adaptor. This can be done by passing the function selector to the `getActionId` function.
  */
-contract AuthorizerAdaptor is IAuthorizerAdaptor, ReentrancyGuard {
+contract AuthorizerAdaptorGamma is IAuthorizerAdaptor, ReentrancyGuard {
     using Address for address;
 
     bytes32 private immutable _actionIdDisambiguator;
