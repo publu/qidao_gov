@@ -23,6 +23,7 @@
     "@balancer-labs/v2-interfaces": "^0.4.0",
     "@balancer-labs/v2-solidity-utils": "^4.0.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
-    "@openzeppelin/contracts": "^4.9.1"
+    "@openzeppelin/contracts": "^4.9.1",
+    "dotenv": "^16.3.1"
   }
 }
