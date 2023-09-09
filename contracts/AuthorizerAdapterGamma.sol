@@ -103,9 +103,6 @@ contract AuthorizerAdaptorGamma is IAuthorizerAdaptor, ReentrancyGuard {
         _require(data.length >= 4, Errors.INSUFFICIENT_DATA);
         bytes4 selector = data[0] | (bytes4(data[1]) >> 8) | (bytes4(data[2]) >> 16) | (bytes4(data[3]) >> 24);
 
-        // NOTE: The `TimelockAuthorizer` special cases the `AuthorizerAdaptor` calling into it, so that the action ID
-        // and `target` values are completely ignored. The following check will only pass if the caller is the
-        // `AuthorizerAdaptorEntrypoint`, which will have already checked for permissions correctly.
         _require(_canPerform(getActionId(selector), msg.sender, target), Errors.SENDER_NOT_ALLOWED);
 
         // We don't check that `target` is a contract so all calls to an EOA will succeed.
