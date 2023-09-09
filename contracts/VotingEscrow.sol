@@ -63,8 +63,8 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     int128 internal constant iMAXTIME = 4 * 365 * 86400;
     uint internal constant MULTIPLIER = 1 ether;
 
-    uint public immutable MINTIME;
-    address public immutable token;
+    uint public constant MINTIME = 2419200;
+    address public constant token = 0x39eB558131E5eBeb9f76a6cbf6898f6E6DCe5e4E;
     uint public supply;
     bool public unlocked;
 
@@ -75,10 +75,13 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     mapping(address => Point[1000000000]) public user_point_history; // user -> Point[user_epoch]
     mapping(address => uint) public user_point_epoch;
     mapping(uint => int128) public slope_changes; // time -> signed slope change
+    mapping(address => bool) public auto_lock; // does user want to auto_lock the locking externally
 
     // Aragon's view methods for compatibility
     address public controller;
     bool public transfersEnabled;
+
+    address public locker;
 
     string public constant name = "Advanced Voting Escrowed QI";
     string public constant symbol = "aveQI";
@@ -90,14 +93,12 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     mapping(address => bool) public contracts_whitelist;
 
     /// @notice Contract constructor
-    /// @param token_addr `ERC20CRV` token address
-    constructor(address token_addr, uint min_time) {
-        token = token_addr;
+    constructor() {
         point_history[0].blk = block.number;
         point_history[0].ts = block.timestamp;
         controller = msg.sender;
+        locker = msg.sender;
         transfersEnabled = true;
-        MINTIME = min_time;
     }
 
     modifier onlyUserOrWhitelist() {
@@ -110,6 +111,12 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     modifier notUnlocked() {
         require(!unlocked, "unlocked globally");
         _;
+    }
+
+    /// @notice set address as locker `addr`
+    /// @param addr Address to control auto deposits
+    function set_locker(address addr) external onlyOwner {
+        locker = addr;
     }
 
     /// @notice Add address to whitelist smart contract depositors `addr`
@@ -331,13 +338,17 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
         _checkpoint(address(0x0), LockedBalance(0, 0), LockedBalance(0, 0));
     }
 
-    /// @notice Deposit `_value` tokens for `_addr` and add to the lock
-    /// @dev Anyone (even a smart contract) can deposit for someone else, but
-    ///      cannot extend their locktime and deposit for a brand new user
-    /// @param _addr User's wallet address
-    /// @param _value Amount to add to user's lock
+    
+    /// @notice Deposit `_value` tokens on behalf of `_addr` and add to their locked balance.
+    /// @dev Only `locker` can make a deposit on behalf of others.
+    /// @dev Only accounts that have opted-in can have deposits made on their behalf.
+    ///      Deposits cannot be made for users without an existing lock or whose lock has expired.
+    /// @param _addr The address of the user for whom the deposit is being made.
+    /// @param _value The amount of tokens to be deposited and added to the user's lock.
     function deposit_for(address _addr, uint _value) external nonReentrant notUnlocked {
         LockedBalance memory _locked = locked[_addr];
+
+        require(auto_lock[_addr] || msg.sender == locker), "Cannot add unless account enables it or locker is there");
 
         require(_value > 0); // dev: need non-zero value
         require(_locked.amount > 0, "No existing lock found");
@@ -368,6 +379,11 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
         _create_lock(_value, _unlock_time);
     }
 
+    /// @notice External function for setting user auto-locking
+    /// @param _value enabled or disabled
+    function set_auto_lock(bool _value) external {
+        auto_lock[msg.sender] = val;
+    }
 
     /// @notice Deposit `_value` additional tokens for `msg.sender` without modifying the unlock time
     /// @param _value Amount of tokens to deposit and add to the lock
