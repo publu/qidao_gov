@@ -348,7 +348,7 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     function deposit_for(address _addr, uint _value) external nonReentrant notUnlocked {
         LockedBalance memory _locked = locked[_addr];
 
-        require(auto_lock[_addr] || msg.sender == locker), "Cannot add unless account enables it or locker is there");
+        require(auto_lock[_addr] || msg.sender == locker, "Cannot add unless account enables it or locker is there");
 
         require(_value > 0); // dev: need non-zero value
         require(_locked.amount > 0, "No existing lock found");
@@ -382,7 +382,7 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     /// @notice External function for setting user auto-locking
     /// @param _value enabled or disabled
     function set_auto_lock(bool _value) external {
-        auto_lock[msg.sender] = val;
+        auto_lock[msg.sender] = _value;
     }
 
     /// @notice Deposit `_value` additional tokens for `msg.sender` without modifying the unlock time
