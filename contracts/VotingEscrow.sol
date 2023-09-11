@@ -316,7 +316,7 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
         _checkpoint(_addr, old_locked, _locked);
 
         if (_value != 0) {
-            IERC20(token).safeTransferFrom(_addr, address(this), _value);
+            IERC20(token).safeTransferFrom(msg.sender, address(this), _value);
         }
 
         emit Deposit(_addr, _value, _locked.end, deposit_type, block.timestamp);
