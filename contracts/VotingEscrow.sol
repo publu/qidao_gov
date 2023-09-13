@@ -80,6 +80,8 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     address public controller;
     bool public transfersEnabled;
 
+    bool public self_lock;
+
     string public constant name = "Advanced Voting Escrowed QI";
     string public constant symbol = "aveQI";
     string public constant version = "1.0.0";
@@ -119,6 +121,12 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     /// @param addr Address to be removed from whitelist
     function remove_from_whitelist(address addr) external onlyOwner {
         contracts_whitelist[addr] = false;
+    }
+
+    /// @notice Set the state of the self_lock variable
+    /// @param _self_lock The new state for the self_lock variable
+    function set_self_lock(bool _self_lock) external onlyOwner {
+        self_lock = _self_lock;
     }
 
     /// @notice Unlock all locked balances
@@ -342,27 +350,32 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
         _deposit_for(_addr, _value, 0, _locked, DepositType.DEPOSIT_FOR_TYPE);
     }
 
-    /// @notice Deposit `_value` tokens for `msg.sender` and lock until `_unlock_time`
-    /// @param _value Amount to deposit
-    /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
-    function _create_lock(uint _value, uint _unlock_time) internal {
+    /// @notice Create a lock for a specified amount of tokens until a given unlock time.
+    /// If self_lock is enabled, only the sender can create locks for themselves.
+    /// If self_lock is disabled, locks can be created for any address.
+    /// @param _addr Address for which the tokens will be locked.
+    /// @param _value Amount of tokens to lock.
+    /// @param _unlock_time Epoch time when tokens will be unlocked, rounded down to whole weeks.
+    function _create_lock_for(address _addr, uint _value, uint _unlock_time) internal {
         require(_value > 0); // dev: need non-zero value
+        require(!self_lock || (_addr == msg.sender), "Creating locks for others is disabled");
 
-        LockedBalance memory _locked = locked[msg.sender];
+        LockedBalance memory _locked = locked[_addr];
         require(_locked.amount == 0, "Withdraw old tokens first");
 
         uint unlock_time = (_unlock_time / WEEK) * WEEK; // Locktime is rounded down to weeks
         require(unlock_time >= block.timestamp + MINTIME, "Voting lock must be at least MINTIME");
         require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 4 years max");
 
-        _deposit_for(msg.sender, _value, unlock_time, _locked, DepositType.CREATE_LOCK_TYPE);
+        _deposit_for(_addr, _value, unlock_time, _locked, DepositType.CREATE_LOCK_TYPE);
     }
 
-    /// @notice External function for _create_lock
+    /// @notice External function for _create_lock_for
+    /// @param _addr Address of beneficiary
     /// @param _value Amount to deposit
     /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
-    function create_lock(uint _value, uint _unlock_time) external nonReentrant onlyUserOrWhitelist notUnlocked {
-        _create_lock(_value, _unlock_time);
+    function create_lock_for(address _addr, uint _value, uint _unlock_time) external nonReentrant onlyUserOrWhitelist notUnlocked {
+        _create_lock_for(_addr, _value, _unlock_time);
     }
 
     /// @notice Deposit `_value` additional tokens for `msg.sender` without modifying the unlock time
@@ -447,7 +460,7 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     /// @param _unlock_time Epoch time when tokens unlock, rounded down to whole weeks
     function withdraw_and_create_lock(uint _value, uint _unlock_time) external nonReentrant onlyUserOrWhitelist notUnlocked {
         _withdraw();
-        _create_lock(_value, _unlock_time);
+        _create_lock_for(msg.sender,_value, _unlock_time);
     }
 
     // The following ERC20/minime-compatible methods are not real balanceOf and supply!
