@@ -44,7 +44,7 @@ struct LockedBalance {
     uint end;
 }
 
-contract VotingEscrow is Ownable, ReentrancyGuard {
+contract VotingEscrowGamma is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     enum DepositType {
@@ -75,6 +75,8 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
     mapping(address => Point[1000000000]) public user_point_history; // user -> Point[user_epoch]
     mapping(address => uint) public user_point_epoch;
     mapping(uint => int128) public slope_changes; // time -> signed slope change
+
+    mapping(address => bool) public delegated; // enable users to delegate time to anyone
 
     // Aragon's view methods for compatibility
     address public controller;
@@ -336,6 +338,9 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
         _checkpoint(address(0x0), LockedBalance(0, 0), LockedBalance(0, 0));
     }
 
+    function setDelegated(bool _should) external {
+        delegated[msg.sender]=_should;
+    }
     
     /// @notice Deposit `_value` tokens on behalf of `_addr` and add to their locked balance.
     /// @dev Anyone can increase to any user with an existing lock. it will come out of msg.sender's balance
@@ -400,8 +405,16 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
         _increase_unlock_time(_unlock_time);
     }
 
-    function _increase_unlock_time(uint _unlock_time) internal {
-        LockedBalance memory _locked = locked[msg.sender];
+    /// @notice Extend the unlock time for `addr` to `_unlock_time`
+    /// @param _addr who is getting increased
+    /// @param _unlock_time New epoch time for unlocking
+    function increase_unlock_time_for(address _addr, uint _unlock_time) external nonReentrant notUnlocked {
+        require(delegated[_addr], "Cannot increase lock_for if not delegated");
+        _increase_unlock_time_for(_addr, _unlock_time);
+    }
+
+    function _increase_unlock_time_for(address _addr, uint _unlock_time) internal {
+        LockedBalance memory _locked = locked[_addr];
         uint unlock_time = (_unlock_time / WEEK) * WEEK; // Locktime is rounded down to weeks
 
         require(_locked.end > block.timestamp, "Lock expired");
@@ -409,7 +422,11 @@ contract VotingEscrow is Ownable, ReentrancyGuard {
         require(unlock_time > _locked.end, "Can only increase lock duration");
         require(unlock_time <= block.timestamp + MAXTIME, "Voting lock can be 4 years max");
 
-        _deposit_for(msg.sender, 0, unlock_time, _locked, DepositType.INCREASE_UNLOCK_TIME);
+        _deposit_for(_addr, 0, unlock_time, _locked, DepositType.INCREASE_UNLOCK_TIME);
+    }
+
+    function _increase_unlock_time(uint _unlock_time) internal {
+        _increase_unlock_time_for(msg.sender, _unlock_time);
     }
 
     /// @notice Extend the unlock time and/or for `msg.sender` to `_unlock_time`
