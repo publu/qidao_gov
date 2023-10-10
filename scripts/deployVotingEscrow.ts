@@ -5,7 +5,7 @@ async function main() {
 
     console.log("Account balance:", (await deployer.getBalance()).toString());
 
-    const FeeDistributor = await hre.ethers.getContractFactory("VotingEscrow");
+    const FeeDistributor = await hre.ethers.getContractFactory("VotingEscrowGamma");
     const feeDistributor = await FeeDistributor.deploy();
 
     await feeDistributor.deployed();
