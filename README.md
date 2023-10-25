@@ -10,7 +10,7 @@ The voting escrow contracts were developed in the context of a snapshot vote con
 
 The repository includes the following contracts:
 
-- `VotingEscrow.vy`: This contract implements the core functionality of the voting escrow system. It allows users to deposit tokens, lock them for a specified period, increase the lock amount, extend the lock duration, and withdraw tokens after the lock expires. The contract also provides methods for calculating voting power and total supply at specific points in time.
+- `VotingEscrow.sol`: This contract implements the core functionality of the voting escrow system. It allows users to deposit tokens, lock them for a specified period, increase the lock amount, extend the lock duration, and withdraw tokens after the lock expires. The contract also provides methods for calculating voting power and total supply at specific points in time.
 
 - `FeeDistributor.sol`: This contract is responsible for distributing fees collected. It receives fees from various sources and distributes them to the designated recipients based on predefined rules. The FeeDistributor contract can interact with the VotingEscrow contract to determine the voting power of users and allocate fees accordingly.
 
