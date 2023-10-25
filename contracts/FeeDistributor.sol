@@ -11,7 +11,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
@@ -48,8 +47,8 @@ contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, Reentra
     uint256 private _timeCursor;
     mapping(uint256 => uint256) private _veSupplyCache;
 
-    // Whitelist State
-    mapping(address => bool) private _whitelistedTokens;
+    // Reward Tokens
+    mapping(address => bool) public _rewardTokens;
 
     // Token State
 
@@ -92,10 +91,6 @@ contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, Reentra
         }
         _startTime = startTime;
         _timeCursor = startTime;
-    }
-
-    function setWhitelisted(address token, bool isWhitelisted) external onlyOwner {
-        _whitelistedTokens[token] = isWhitelisted;
     }
 
     /**
@@ -187,7 +182,7 @@ contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, Reentra
      * @param amount - The amount of tokens to deposit.
      */
     function depositToken(IERC20 token, uint256 amount) external override nonReentrant {
-        require(_whitelistedTokens[address(token)], "depositToken: token not whitelisted");
+        require(allowedRewardTokens[address(token)], "depositToken: token not allowed");
         _checkpointToken(token, false);
         token.safeTransferFrom(msg.sender, address(this), amount);
         _checkpointToken(token, true);
@@ -642,5 +637,18 @@ contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, Reentra
     function _roundUpTimestamp(uint256 timestamp) private pure returns (uint256) {
         // Overflows are impossible here for all realistic inputs.
         return _roundDownTimestamp(timestamp + 1 weeks - 1);
+    }
+
+    function addAllowedRewardTokens(address[] calldata tokens) external onlyAdmin {
+        for (uint256 i = 0; i < tokens.length; i++) {
+            require(!allowedRewardTokens[tokens[i]], "already exist");
+            allowedRewardTokens[tokens[i]] = true;
+            _rewardTokens.push(tokens[i]);
+            emit TokenAdded(tokens[i]);
+        }
+    }
+
+    function getAllowedRewardTokens() external view returns (address[] memory) {
+        return _rewardTokens;
     }
 }
