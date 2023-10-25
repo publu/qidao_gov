@@ -25,17 +25,18 @@ import "@balancer-labs/v2-solidity-utils/contracts/helpers/InputHelpers.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeMath.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/math/Math.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 // solhint-disable not-rely-on-time
 
 /**
- * @title Fee Distributor
+ * @title Allowable Fee Distributor 
  * @notice Distributes any tokens transferred to the contract (e.g. Protocol fees and any BAL emissions) among veBAL
  * holders proportionally based on a snapshot of the week at which the tokens are sent to the FeeDistributor contract.
  * @dev Supports distributing arbitrarily many different tokens. In order to start distributing a new token to veBAL
  * holders simply transfer the tokens to the `FeeDistributor` contract and then call `checkpointToken`.
  */
-contract FeeDistributor is IFeeDistributor, OptionalOnlyCaller, ReentrancyGuard {
+contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, ReentrancyGuard, Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -46,6 +47,9 @@ contract FeeDistributor is IFeeDistributor, OptionalOnlyCaller, ReentrancyGuard 
     // Global State
     uint256 private _timeCursor;
     mapping(uint256 => uint256) private _veSupplyCache;
+
+    // Whitelist State
+    mapping(address => bool) private _whitelistedTokens;
 
     // Token State
 
@@ -88,6 +92,10 @@ contract FeeDistributor is IFeeDistributor, OptionalOnlyCaller, ReentrancyGuard 
         }
         _startTime = startTime;
         _timeCursor = startTime;
+    }
+
+    function setWhitelisted(address token, bool isWhitelisted) external onlyOwner {
+        _whitelistedTokens[token] = isWhitelisted;
     }
 
     /**
@@ -179,6 +187,7 @@ contract FeeDistributor is IFeeDistributor, OptionalOnlyCaller, ReentrancyGuard 
      * @param amount - The amount of tokens to deposit.
      */
     function depositToken(IERC20 token, uint256 amount) external override nonReentrant {
+        require(_whitelistedTokens[address(token)], "depositToken: token not whitelisted");
         _checkpointToken(token, false);
         token.safeTransferFrom(msg.sender, address(this), amount);
         _checkpointToken(token, true);
@@ -196,6 +205,7 @@ contract FeeDistributor is IFeeDistributor, OptionalOnlyCaller, ReentrancyGuard 
 
         uint256 length = tokens.length;
         for (uint256 i = 0; i < length; ++i) {
+            require(_whitelistedTokens[address(tokens[i])], "depositToken: token not whitelisted");
             _checkpointToken(tokens[i], false);
             tokens[i].safeTransferFrom(msg.sender, address(this), amounts[i]);
             _checkpointToken(tokens[i], true);
