@@ -55,6 +55,11 @@ contract RewardDistributor is
     address[] private _rewardTokens;
     mapping(address => bool) public allowedRewardTokens;
 
+    /**
+     * @notice Event emitted when the admin role is transferred
+     * @param newAdmin The address of the new admin
+     */
+    event AdminTransferred(address indexed newAdmin);
 
     // Token State
 
@@ -780,13 +785,21 @@ contract RewardDistributor is
         }
     }
 
+    /**
+     * @notice Returns the list of allowed reward tokens
+     * @return An array of addresses of the allowed reward tokens
+     */
     function getAllowedRewardTokens() external view returns (address[] memory) {
         return _rewardTokens;
     }
 
+    /**
+     * @notice Transfers the admin role to a new address
+     * @param newAdmin The address of the new admin
+     */
     function transferAdmin(address newAdmin) external onlyAdmin {
         require (newAdmin != address(0), "zero address");
         admin = newAdmin;
+        emit AdminTransferred(newAdmin);
     }
-
 }

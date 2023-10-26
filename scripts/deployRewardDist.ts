@@ -12,16 +12,20 @@ async function main() {
     await rewardDistributor.deployed();
 
     console.log("RewardDistributor deployed to:", rewardDistributor.address);
+}
 
-    const votingEscrowAddress = "0x12345";
-    const startTime = "1000000000"
-    const admin = "0x67890";
+async function initializeRewardDistributor() {
+    const rewardDistributor = await hre.ethers.getContractAt("RewardDistributor", "0x53371f87AD6D20A0dBfB37f04A35f4d14065C342");
 
+    const votingEscrowAddress = "0x1bffabc6dfcafb4177046db6686e3f135e8bc732";
+    const startTime = Math.floor((Date.now()+100000) / 1000).toString(); // Current time in seconds
+    const admin = "0x9d3c8a651e48e4D89ca5D1553035A4BE3c17cFe6";
+    console.log(votingEscrowAddress, startTime, admin)
     await rewardDistributor.initialize(votingEscrowAddress, startTime, admin);
     console.log("RewardDistributor initialized");
 }
 
-main()
+initializeRewardDistributor()
     .then(() => process.exit(0))
     .catch(error => {
         console.error(error);

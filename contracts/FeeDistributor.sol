@@ -11,6 +11,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
@@ -24,18 +25,17 @@ import "@balancer-labs/v2-solidity-utils/contracts/helpers/InputHelpers.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeMath.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/math/Math.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 
 // solhint-disable not-rely-on-time
 
 /**
- * @title Allowable Fee Distributor 
+ * @title Fee Distributor
  * @notice Distributes any tokens transferred to the contract (e.g. Protocol fees and any BAL emissions) among veBAL
  * holders proportionally based on a snapshot of the week at which the tokens are sent to the FeeDistributor contract.
  * @dev Supports distributing arbitrarily many different tokens. In order to start distributing a new token to veBAL
  * holders simply transfer the tokens to the `FeeDistributor` contract and then call `checkpointToken`.
  */
-contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, ReentrancyGuard, Ownable {
+contract FeeDistributor is IFeeDistributor, OptionalOnlyCaller, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -46,9 +46,6 @@ contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, Reentra
     // Global State
     uint256 private _timeCursor;
     mapping(uint256 => uint256) private _veSupplyCache;
-
-    // Reward Tokens
-    mapping(address => bool) public _rewardTokens;
 
     // Token State
 
@@ -182,7 +179,6 @@ contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, Reentra
      * @param amount - The amount of tokens to deposit.
      */
     function depositToken(IERC20 token, uint256 amount) external override nonReentrant {
-        require(allowedRewardTokens[address(token)], "depositToken: token not allowed");
         _checkpointToken(token, false);
         token.safeTransferFrom(msg.sender, address(this), amount);
         _checkpointToken(token, true);
@@ -200,7 +196,6 @@ contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, Reentra
 
         uint256 length = tokens.length;
         for (uint256 i = 0; i < length; ++i) {
-            require(_whitelistedTokens[address(tokens[i])], "depositToken: token not whitelisted");
             _checkpointToken(tokens[i], false);
             tokens[i].safeTransferFrom(msg.sender, address(this), amounts[i]);
             _checkpointToken(tokens[i], true);
@@ -637,18 +632,5 @@ contract AllowableFeeDistributor is IFeeDistributor, OptionalOnlyCaller, Reentra
     function _roundUpTimestamp(uint256 timestamp) private pure returns (uint256) {
         // Overflows are impossible here for all realistic inputs.
         return _roundDownTimestamp(timestamp + 1 weeks - 1);
-    }
-
-    function addAllowedRewardTokens(address[] calldata tokens) external onlyAdmin {
-        for (uint256 i = 0; i < tokens.length; i++) {
-            require(!allowedRewardTokens[tokens[i]], "already exist");
-            allowedRewardTokens[tokens[i]] = true;
-            _rewardTokens.push(tokens[i]);
-            emit TokenAdded(tokens[i]);
-        }
-    }
-
-    function getAllowedRewardTokens() external view returns (address[] memory) {
-        return _rewardTokens;
     }
 }
