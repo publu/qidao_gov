@@ -76,9 +76,11 @@ interface IVotingEscrow {
 
     function token() external view returns (address);
 
-    function totalSupply(uint256 t) external view returns (uint256);
+    function totalSupply() external view returns (uint256);
 
     function totalSupplyAt(uint256 _block) external view returns (uint256);
+
+    function totalSupplyAtT(uint256 _timestamp) external view returns (uint256);
 
     function user_point_epoch(address user) external view returns (uint256);
 

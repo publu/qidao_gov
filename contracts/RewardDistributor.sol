@@ -25,6 +25,8 @@ import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeMath.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/math/Math.sol";
 
+import "hardhat/console.sol";
+
 // solhint-disable not-rely-on-time
 
 /**
@@ -119,7 +121,7 @@ contract RewardDistributor is
             // If `votingEscrow` did not have a non-zero supply at the beginning of the current week
             // then any tokens which are distributed this week will be lost permanently.
             require(
-                votingEscrow.totalSupply(currentWeek) > 0,
+                votingEscrow.totalSupplyAtT(currentWeek) > 0,
                 "Zero total supply results in lost tokens"
             );
         }
@@ -684,27 +686,35 @@ contract RewardDistributor is
         uint256 nextWeekToCheckpoint = _timeCursor;
         uint256 weekStart = _roundDownTimestamp(block.timestamp);
 
+        console.log("Checkpointing total supply. Current time cursor: %s, Week start: %s", nextWeekToCheckpoint, weekStart);
+
         // We expect `timeCursor == weekStart + 1 weeks` when fully up to date.
         if (nextWeekToCheckpoint > weekStart || weekStart == block.timestamp) {
             // We've already checkpointed up to this week so perform early return
+            console.log("Already checkpointed up to this week or weekStart is the current timestamp. Exiting early.");
             return;
         }
 
         _votingEscrow.checkpoint();
+        console.log("VotingEscrow checkpoint called.");
 
         // Step through the each week and cache the total supply at beginning of week on this contract
         for (uint256 i = 0; i < 20; ++i) {
-            if (nextWeekToCheckpoint > weekStart) break;
-
-            _veSupplyCache[nextWeekToCheckpoint] = _votingEscrow.totalSupply(
-                nextWeekToCheckpoint
-            );
+            if (nextWeekToCheckpoint > weekStart) {
+                console.log("Next week to checkpoint (%s) is after week start (%s). Breaking loop.", nextWeekToCheckpoint, weekStart);
+                break;
+            }
+            console.log("issue is probably here? nextWeekToCheckpoint (%s)", nextWeekToCheckpoint);
+            uint256 totalSupplyAtT = _votingEscrow.totalSupplyAtT(nextWeekToCheckpoint);
+            console.log("Caching total supply at timestamp %s: %s", nextWeekToCheckpoint, totalSupplyAtT);
+            _veSupplyCache[nextWeekToCheckpoint] = totalSupplyAtT;
 
             // This is safe as we're incrementing a timestamp
             nextWeekToCheckpoint += 1 weeks;
         }
         // Update state to the end of the current week (`weekStart` + 1 weeks)
         _timeCursor = nextWeekToCheckpoint;
+        console.log("Updated time cursor to: %s", _timeCursor);
     }
 
     // Helper functions
@@ -791,6 +801,17 @@ contract RewardDistributor is
      */
     function getAllowedRewardTokens() external view returns (address[] memory) {
         return _rewardTokens;
+    }
+
+    /**
+     * @notice Allows the admin to transfer all of a specific token's balance from the contract to the admin address
+     * @dev This function is marked unsafe as it will mess with the checkpointing done for that ERC20 token.
+     * It is meant for recovering tokens sent to the contract by mistake, but should be used with extreme caution.
+     * @param token The token to transfer from the contract to the admin
+     */
+    function clawbackUnsafe(IERC20 token) external onlyAdmin {
+        uint256 balance = token.balanceOf(address(this));
+        token.safeTransfer(admin, balance);
     }
 
     /**
