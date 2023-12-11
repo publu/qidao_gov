@@ -23,6 +23,10 @@ async function main() {
         address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" // someone with lots of Qi/ETH in ve
     }
 
+    const lockToken = {
+        address: "0x39eB558131E5eBeb9f76a6cbf6898f6E6DCe5e4E" // Qi/ETH bpt
+    }
+
     const votingEscrowAddress = "0x1bffabc6dfcafb4177046db6686e3f135e8bc732";
 
     // Call checkpoint on VotingEscrowGamma contract
@@ -37,6 +41,7 @@ async function main() {
     await RewardDistributor.initialize(votingEscrowAddress, startTime, deployer.address);
 
     await RewardDistributor.deployed();
+    //await VotingEscrowGamma.checkpoint();
 
     const rewardDistributorAddress = RewardDistributor.address;
     console.log(`RewardDistributor deployed to: ${rewardDistributorAddress}`);
@@ -47,12 +52,12 @@ async function main() {
     
     console.log("Using locker account:", locker.address);
 
-
     // Increase time by 1 week
     await ethers.provider.send("evm_increaseTime", [oneWeekInSeconds]);
     await ethers.provider.send("evm_mine");
     console.log("Time increased by 1 week");
-    const IERC20 = await ethers.getContractAt("WETH9", rewardToken.address); // Replace with actual token address
+    const IERC20 = await ethers.getContractAt("WETH9", rewardToken.address);
+    const IlockToken = await ethers.getContractAt("WETH9", lockToken.address)
 
     // Wrap ETH to get WETH
     const weth = IERC20.attach(rewardToken.address); // WETH token address
@@ -74,14 +79,71 @@ async function main() {
     await ethers.provider.send("evm_mine");
     console.log("Time increased by 2 weeks");
 
+    const amountFee = "100";
+
+    const userAddress = "0xa1a7Ae2f202C5762f3C4ee2FeD99E3f42c6F1f1F";
+    const checkTime = 1702512000;
+
+    // Check balanceOfAt for the user at the specified time
+    const balanceOfAt = await VotingEscrowGamma.balanceOfAtT(userAddress, checkTime);
+    console.log(`BalanceOfAt for user ${userAddress} at time ${checkTime}: ${ethers.utils.formatEther(balanceOfAt)}`);
+
+    // Check regular balanceOf for the user
+    const balanceOf = await VotingEscrowGamma.balanceOf(userAddress);
+    console.log(`Regular BalanceOf for user ${userAddress}: ${ethers.utils.formatEther(balanceOf)}`);
+
+    // Send ETH to the specified address to cover potential transaction fees
+    console.log(`Sending ${amountFee} ETH to cover transaction fees`);
+    await deployer.sendTransaction({ to: "0xa1a7Ae2f202C5762f3C4ee2FeD99E3f42c6F1f1F", value: ethers.utils.parseEther(amountFee) });
+    console.log(`Transaction fees sent to 0xa1a7Ae2f202C5762f3C4ee2FeD99E3f42c6F1f1F`);
+    
+    // Impersonate the account
+    console.log(`Impersonating account 0xa1a7Ae2f202C5762f3C4ee2FeD99E3f42c6F1f1F`);
+    await ethers.provider.send("hardhat_impersonateAccount", ["0xa1a7Ae2f202C5762f3C4ee2FeD99E3f42c6F1f1F"]);
+    console.log(`Account impersonated`);
+
+    const impersonatedAccount = await ethers.getSigner("0xa1a7Ae2f202C5762f3C4ee2FeD99E3f42c6F1f1F");
+
+    console.log("impersonated, now approving");
+    await IlockToken.connect(impersonatedAccount).approve(VotingEscrowGamma.address, ethers.utils.parseEther("1000000000000000000000000000"));
+    console.log("approved");
+
+    // Call withdraw from the VotingEscrow contract
+    console.log(`Calling withdraw on VotingEscrow contract for impersonated account`);
+                                                                                    
+    await VotingEscrowGamma.connect(impersonatedAccount).withdraw_and_create_lock("54965999123345500000000", "1733969117");
+    console.log("Withdraw and lock called on VotingEscrow contract");
+
     // Impersonate the locker and attempt to claim the token
     await ethers.provider.send("hardhat_impersonateAccount", [locker.address]);
     const impersonatedLocker = await ethers.getSigner(locker.address);
     // Send ETH to impersonatedLocker to pay for transactions
-    await deployer.sendTransaction({ to: impersonatedLocker.address, value: ethers.utils.parseEther("1") });
-    console.log(`Sent 1 ETH to ${impersonatedLocker.address} for transaction fees`);
+    await deployer.sendTransaction({ to: impersonatedLocker.address, value: ethers.utils.parseEther(amountFee) });
+    console.log(`Sent ${amountFee} ETH to ${impersonatedLocker.address} for transaction fees`);
+
+    const lockerBalance = await IERC20.balanceOf(locker.address);
+    console.log(`Locker balance of rewardToken: ${ethers.utils.formatEther(lockerBalance)}`);
+
     const claimedAmount = await RewardDistributor.connect(impersonatedLocker).claimToken(locker.address, rewardToken.address);
-    console.log(`Claimed amount: ${ethers.utils.formatEther(claimedAmount)} tokens`);
+    const newLockerBalance = await IERC20.balanceOf(locker.address);
+    console.log(`New Locker balance of rewardToken: ${ethers.utils.formatEther(newLockerBalance)}`);
+
+
+    /*
+        Checked with one unlocked account but needs more verification
+            withdraw()
+            withdraw_and_create_lock
+                    
+
+
+        we think are broken (through _supply_at internal function)
+            totalSupply
+            totalSupplyAtT
+
+        
+            balanceOfAt
+            balanceOf
+    */
 }
 
 main()
