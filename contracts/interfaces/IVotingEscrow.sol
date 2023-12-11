@@ -68,10 +68,6 @@ interface IVotingEscrow {
 
     function name() external view returns (string memory);
 
-    function point_history(
-        uint256 timestamp
-    ) external view returns (Point memory);
-
     function symbol() external view returns (string memory);
 
     function token() external view returns (address);
@@ -93,6 +89,12 @@ interface IVotingEscrow {
         address user,
         uint256 timestamp
     ) external view returns (Point memory);
-
     function withdraw() external;
+
+
+    // hack to access the mappings
+    function slope_changes(uint _timestamp) external view returns (int128);
+
+    // Access to the point_history mapping
+    function point_history(uint _epoch) external view returns (Point memory);
 }
