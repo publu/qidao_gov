@@ -25,8 +25,6 @@ import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeMath.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/math/Math.sol";
 
-import "hardhat/console.sol";
-
 // solhint-disable not-rely-on-time
 
 /**
@@ -43,6 +41,8 @@ contract RewardDistributor is
 {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
+
+    uint internal constant WEEK = 1 weeks;
 
     bool public isInitialized;
     IVotingEscrow private _votingEscrow;
@@ -386,6 +386,7 @@ contract RewardDistributor is
         address user,
         IERC20 token
     ) internal returns (uint256) {
+
         TokenState storage tokenState = _tokenState[token];
         uint256 nextUserTokenWeekToClaim = _getUserTokenTimeCursor(user, token);
 
@@ -432,7 +433,6 @@ contract RewardDistributor is
             token.safeTransfer(user, amount);
             emit TokensClaimed(user, token, amount, nextUserTokenWeekToClaim);
         }
-
         return amount;
     }
 
@@ -686,27 +686,22 @@ contract RewardDistributor is
         uint256 nextWeekToCheckpoint = _timeCursor;
         uint256 weekStart = _roundDownTimestamp(block.timestamp);
 
-        console.log("Checkpointing total supply. Current time cursor: %s, Week start: %s", nextWeekToCheckpoint, weekStart);
-
         // We expect `timeCursor == weekStart + 1 weeks` when fully up to date.
         if (nextWeekToCheckpoint > weekStart || weekStart == block.timestamp) {
             // We've already checkpointed up to this week so perform early return
-            console.log("Already checkpointed up to this week or weekStart is the current timestamp. Exiting early.");
             return;
         }
 
         _votingEscrow.checkpoint();
-        console.log("VotingEscrow checkpoint called.");
 
         // Step through the each week and cache the total supply at beginning of week on this contract
         for (uint256 i = 0; i < 20; ++i) {
             if (nextWeekToCheckpoint > weekStart) {
-                console.log("Next week to checkpoint (%s) is after week start (%s). Breaking loop.", nextWeekToCheckpoint, weekStart);
                 break;
             }
-            console.log("issue is probably here? nextWeekToCheckpoint (%s)", nextWeekToCheckpoint);
-            uint256 totalSupplyAtT = _votingEscrow.totalSupplyAtT(nextWeekToCheckpoint);
-            console.log("Caching total supply at timestamp %s: %s", nextWeekToCheckpoint, totalSupplyAtT);
+
+            uint256 totalSupplyAtT = totalSupplyAtT(nextWeekToCheckpoint); // replaced with local function
+
             _veSupplyCache[nextWeekToCheckpoint] = totalSupplyAtT;
 
             // This is safe as we're incrementing a timestamp
@@ -714,7 +709,6 @@ contract RewardDistributor is
         }
         // Update state to the end of the current week (`weekStart` + 1 weeks)
         _timeCursor = nextWeekToCheckpoint;
-        console.log("Updated time cursor to: %s", _timeCursor);
     }
 
     // Helper functions
@@ -822,5 +816,55 @@ contract RewardDistributor is
         require (newAdmin != address(0), "zero address");
         admin = newAdmin;
         emit AdminTransferred(newAdmin);
+    }
+
+    /**
+        These are the reworked functions for claiming rewards from the VE contract
+     */
+
+    function totalSupply() external view returns (uint) {
+        return _totalSupply(block.timestamp);
+    }
+
+    function totalSupplyAtT(uint t) public view returns (uint) {
+        return _totalSupply(t);
+    }
+
+    /// @notice Calculate total voting power
+    /// @dev Adheres to the ERC20 `totalSupply` interface for Aragon compatibility
+    /// @return Total voting power
+    function _totalSupply(uint t) internal view returns (uint) {
+        uint _epoch = _votingEscrow.epoch();
+        IVotingEscrow.Point memory last_point = _votingEscrow.point_history(_epoch);
+        return _supply_at(last_point, t);
+    }
+
+    /// @notice Calculate total voting power at some point in the past
+    /// @param point The point (bias/slope) to start search from
+    /// @param t Time to calculate the total voting power at
+    /// @return Total voting power at that time
+    function _supply_at(IVotingEscrow.Point memory point, uint t) internal view returns (uint) {
+        IVotingEscrow.Point memory last_point = point;
+        uint t_i = (last_point.ts / WEEK) * WEEK;
+        for (uint i = 0; i < 255; ++i) {
+            t_i += WEEK;
+            int128 d_slope = 0;
+            if (t_i > t) {
+                t_i = t;
+            } else {
+                d_slope = _votingEscrow.slope_changes(t_i);
+            }
+            last_point.bias -= last_point.slope * int128(int(t_i - last_point.ts));
+            if (t_i == t) {
+                break;
+            }
+            last_point.slope += d_slope;
+            last_point.ts = t_i;
+        }
+
+        if (last_point.bias < 0) {
+            last_point.bias = 0;
+        }
+        return uint(uint128(last_point.bias));
     }
 }
