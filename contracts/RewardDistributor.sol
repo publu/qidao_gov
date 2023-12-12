@@ -867,4 +867,108 @@ contract RewardDistributor is
         }
         return uint(uint128(last_point.bias));
     }
+
+    /// @notice Get the current voting power for `msg.sender`
+    /// @dev Adheres to the ERC20 `balanceOf` interface for Aragon compatibility
+    /// @param addr User wallet address
+    /// @param _t Epoch time to return voting power at
+    /// @return User voting power
+    function _balanceOf(address addr, uint _t) internal view returns (uint) {
+        uint _epoch = _votingEscrow.user_point_epoch(addr);
+        if (_epoch == 0) {
+            return 0;
+        } else {
+            IVotingEscrow.Point memory last_point = _votingEscrow.user_point_history(addr,_epoch);
+            last_point.bias -= last_point.slope * int128(int(_t) - int(last_point.ts));
+            if (last_point.bias < 0) {
+                last_point.bias = 0;
+            }
+            return uint(int(last_point.bias));
+        }
+    }
+
+    function balanceOfAtT(address addr, uint _t) external view returns (uint) {
+        return _balanceOf(addr, _t);
+    }
+
+    function balanceOf(address addr) external view returns (uint) {
+        return _balanceOf(addr, block.timestamp);
+    }
+
+    /// @notice Binary search to estimate timestamp for block number
+    /// @param _block Block to find
+    /// @param max_epoch Don't go beyond this epoch
+    /// @return Approximate timestamp for block
+    function _find_block_epoch(uint _block, uint max_epoch) internal view returns (uint) {
+        // Binary search
+        uint _min = 0;
+        uint _max = max_epoch;
+        for (uint i = 0; i < 128; ++i) {
+            // Will be always enough for 128-bit numbers
+            if (_min >= _max) {
+                break;
+            }
+            uint _mid = (_min + _max + 1) / 2;
+            if (_votingEscrow.point_history(_mid).blk <= _block) {
+                _min = _mid;
+            } else {
+                _max = _mid - 1;
+            }
+        }
+        return _min;
+    }
+
+    /// @notice Measure voting power of `addr` at block height `_block`
+    /// @dev Adheres to MiniMe `balanceOfAt` interface: https://github.com/Giveth/minime
+    /// @param addr User's wallet address
+    /// @param _block Block to calculate the voting power at
+    /// @return Voting power
+    function balanceOfAt(address addr, uint _block) external view returns (uint) {
+        // Copying and pasting totalSupply code because Vyper cannot pass by
+        // reference yet
+        require(_block <= block.number);
+
+        // Binary search
+        uint _min = 0;
+        uint _max = _votingEscrow.user_point_epoch(addr);
+        for (uint i = 0; i < 128; ++i) {
+            // Will be always enough for 128-bit numbers
+            if (_min >= _max) {
+                break;
+            }
+            uint _mid = (_min + _max + 1) / 2;
+            if (_votingEscrow.user_point_history(addr,_mid).blk <= _block) {
+                _min = _mid;
+            } else {
+                _max = _mid - 1;
+            }
+        }
+
+        IVotingEscrow.Point memory upoint = _votingEscrow.user_point_history(addr,_min);
+
+        uint max_epoch = _votingEscrow.epoch();
+        uint _epoch = _find_block_epoch(_block, max_epoch);
+        IVotingEscrow.Point memory point_0 = _votingEscrow.point_history(_epoch);
+        uint d_block = 0;
+        uint d_t = 0;
+        if (_epoch < max_epoch) {
+            IVotingEscrow.Point memory point_1 = _votingEscrow.point_history(_epoch + 1);
+            d_block = point_1.blk - point_0.blk;
+            d_t = point_1.ts - point_0.ts;
+        } else {
+            d_block = block.number - point_0.blk;
+            d_t = block.timestamp - point_0.ts;
+        }
+        uint block_time = point_0.ts;
+        if (d_block != 0) {
+            block_time += (d_t * (_block - point_0.blk)) / d_block;
+        }
+
+        upoint.bias -= upoint.slope * int128(int(block_time - upoint.ts));
+        if (upoint.bias >= 0) {
+            return uint(uint128(upoint.bias));
+        } else {
+            return 0;
+        }
+    }
 }
