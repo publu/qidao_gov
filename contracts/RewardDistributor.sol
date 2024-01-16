@@ -19,10 +19,10 @@ pragma experimental ABIEncoderV2;
 import {IVotingEscrow} from "./interfaces/IVotingEscrow.sol";
 import {IRewardDistributor} from "./interfaces/IRewardDistributor.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/ReentrancyGuard.sol";
-import "@balancer-labs/v2-solidity-utils/contracts/helpers/OptionalOnlyCaller.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/helpers/InputHelpers.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeERC20.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/SafeMath.sol";
+import "@balancer-labs/v2-solidity-utils/contracts/openzeppelin/EIP712.sol";
 import "@balancer-labs/v2-solidity-utils/contracts/math/Math.sol";
 
 // solhint-disable not-rely-on-time
@@ -36,8 +36,8 @@ import "@balancer-labs/v2-solidity-utils/contracts/math/Math.sol";
  */
 contract RewardDistributor is
     IRewardDistributor,
-    OptionalOnlyCaller,
-    ReentrancyGuard
+    ReentrancyGuard,
+    EIP712
 {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -334,7 +334,6 @@ contract RewardDistributor is
         external
         override
         nonReentrant
-        optionalOnlyCaller(user)
         returns (uint256)
     {
         _checkpointTotalSupply();
@@ -360,7 +359,6 @@ contract RewardDistributor is
         external
         override
         nonReentrant
-        optionalOnlyCaller(user)
         returns (uint256[] memory)
     {
         _checkpointTotalSupply();
@@ -887,12 +885,12 @@ contract RewardDistributor is
         }
     }
 
+    /// @notice Get the voting power at a specific time for a given address
+    /// @param addr The address to query the voting power of
+    /// @param _t The specific time to get the voting power at
+    /// @return The voting power of the address at time _t
     function balanceOfAtT(address addr, uint _t) external view returns (uint) {
         return _balanceOf(addr, _t);
-    }
-
-    function balanceOf(address addr) external view returns (uint) {
-        return _balanceOf(addr, block.timestamp);
     }
 
     /// @notice Binary search to estimate timestamp for block number
